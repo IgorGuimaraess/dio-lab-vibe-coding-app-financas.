@@ -1,0 +1,95 @@
+
+import { useState, useEffect, useCallback } from "react";
+import { motion } from "framer-motion";
+import { Leaf } from "lucide-react";
+import { BalanceCards } from "@/components/BalanceCards";
+import { SpendingChart } from "@/components/SpendingChart";
+import { MonthlyTrendChart } from "@/components/MonthlyTrendChart";
+import { InsightsPanel } from "@/components/InsightsPanel";
+import { TransactionList } from "@/components/TransactionList";
+import { TransactionForm } from "@/components/TransactionForm";
+import { FinancialChatbot } from "@/components/FinancialChatbot";
+import {
+  getTransactions, getTotalByType, getByCategory,
+  getMonthlyTrend, getMonthlyData, generateInsights,
+  seedDemoData, type Transaction, getCategoryInfo,
+} from "@/lib/finance-data";
+
+const Index = () => {
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+
+  const refresh = useCallback(() => {
+    setTransactions(getTransactions());
+  }, []);
+
+  useEffect(() => {
+    seedDemoData();
+    refresh();
+  }, [refresh]);
+
+  const now = new Date();
+  const thisMonth = getMonthlyData(transactions, now.getMonth(), now.getFullYear());
+  const income = getTotalByType(thisMonth, 'income');
+  const expenses = getTotalByType(thisMonth, 'expense');
+  const categoryData = getByCategory(thisMonth);
+  const trendData = getMonthlyTrend(transactions);
+  const insights = generateInsights(transactions);
+
+  // Build financial context for the chatbot
+  const financialContext = `
+Mês atual: ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+Receita do mês: R$ ${income.toFixed(2)}
+Despesas do mês: R$ ${expenses.toFixed(2)}
+Saldo: R$ ${(income - expenses).toFixed(2)}
+Total de transações no mês: ${thisMonth.length}
+
+Gastos por categoria:
+${categoryData.map(c => `- ${c.name}: R$ ${c.value.toFixed(2)}`).join('\n')}
+
+Últimas transações:
+${thisMonth.slice(0, 10).map(t => `- ${t.description}: R$ ${t.amount.toFixed(2)} (${t.type === 'income' ? 'receita' : 'despesa'}, ${getCategoryInfo(t.category).label}, ${new Date(t.date).toLocaleDateString('pt-BR')})`).join('\n')}
+
+Tendência mensal (últimos meses):
+${trendData.map(t => `- ${t.month}: Receitas R$ ${t.receitas.toFixed(2)}, Despesas R$ ${t.despesas.toFixed(2)}, Saldo R$ ${t.saldo.toFixed(2)}`).join('\n')}
+`.trim();
+
+  return (
+    <div className="min-h-screen pb-24">
+      {/* Header */}
+      <header className="bg-card border-b sticky top-0 z-40">
+        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center gap-3">
+          <motion.div
+            initial={{ rotate: -20, scale: 0 }}
+            animate={{ rotate: 0, scale: 1 }}
+            className="bg-primary text-primary-foreground p-2 rounded-xl"
+          >
+            <Leaf className="w-5 h-5" />
+          </motion.div>
+          <div>
+            <h1 className="font-heading text-xl font-bold">Finança Fácil</h1>
+            <p className="text-xs text-muted-foreground">Seu assistente financeiro pessoal</p>
+          </div>
+        </div>
+      </header>
+
+      {/* Content */}
+      <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+        <BalanceCards income={income} expenses={expenses} />
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <SpendingChart data={categoryData} />
+          <MonthlyTrendChart data={trendData} />
+        </div>
+
+        <InsightsPanel insights={insights} />
+
+        <TransactionList transactions={thisMonth} onDeleted={refresh} />
+      </main>
+
+      <TransactionForm onSaved={refresh} />
+      <FinancialChatbot financialContext={financialContext} />
+    </div>
+  );
+};
+
+export default Index;
